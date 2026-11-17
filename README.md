@@ -1,27 +1,83 @@
-Esse foi um projeto que eu fiz no meu estágio de verão em Lean Manufacturing na Baker Hughes.
-O sistema não está totalmente otimizado, pois tive que recorrer a IA em algumas partes, especialmente na parte gráfica.
+# Sistema de Controle de Estoque
 
-Eu adicionei um fluxograma feito no Lucidchart pra ficar melhor explicado o funcionamento do programa.
+Aplicação desktop em Python para controle de inventário de ferramentas e
+consumíveis, com registro de entradas e saídas, níveis de estoque mínimo e
+máximo, e solicitação de compra disparada automaticamente por e-mail quando um
+item atinge o ponto de reposição.
 
-A empresa passava por dificuldades no setor de estoque, e o sistema foi feito a fim de manter um maior controle do que entra/sai no estoque, além de automatizar os emails com
-as solicitações de compra caso se chegue em um estoque mínimo.
+Desenvolvido durante meu estágio em Lean Manufacturing na Baker Hughes.
 
-# Explicando o programa
+## O problema
 
-O programa funciona dessa maneira: temos 2 planilhas, em excel, no sharepoint da empresa. A estrutura delas é parecida:
-Nas ferramentas, temos uma aba chamada "prateleira principal" onde se encontra os itens de mão, outra chamada "prateleira secundária" onde temos ferramentas especiais.
-Ambas as abas contém nome, quantidade, estoque mínimo, máximo e etc. Por fim uma chamada "registros" onde temos os registros de saída e entrada, e outra chamada "emails" 
-onde temos uma coluna com os destinatários e outra com os emails em cópia.
-Já nos consumíveis, temos uma aba chamada "estoque", contendo todos os consumíveis, com nome, código de manual, quantidade, estoque mínimo, máximo e etc. 
-E também possuímos os registros e emails.
+A oficina não contabilizava as entradas e saídas do estoque de ferramentas, e
+isso gerava dois prejuízos:
 
-O programa começa em uma tela de login, onde faz-se o login com as credencias da empresa e a biblioteca e API do office365 faz a autenticação no sharepoint, caso de erro,
-é emitido um erro "credenciais incorretas". Depois temos a tela onde se escolhe o inventário.
-OS CONTROLES DE ACESSO SÃO FEITOS PELO SHAREPOINT (Quem pode editar e quem pode ver cara inventário).
-Após escolhido o inventário, trazemos os dados da planilha, como nome da ferramenta/consumível, localização, quantidade e situação(em estoque ou enviada para compras).
-Temos as funções de adicionar item, remover item, adicionar novo item (que não há na planilha), e sair.
-Cada função, quando utilizada, é registrada na aba de registros da respectiva planilha, e caso fiquemos abaixo do estoque mínimo, é enviado um email contendo detalhes do item.
-Em cada função, temos os respectivos tratamentos de erro, ex: Não dá pra remover mais itens do que há em estoque, no caso das ferramentas da pratileira principal, que possuem PN,
-em caso de PN errado, nada é adicionado, e temos o erro "PN não encontrado".
+- **Tempo** — o mecânico parava a manutenção e gastava minutos procurando uma
+  ferramenta, várias vezes ao dia
+- **Ruptura** — itens acabavam sem ninguém perceber. Como o lead time de compra
+  era longo, quando a falta era notada já era tarde, e em casos críticos
+  chegava a interromper a produção
 
+## Resultado
 
+Medimos o antes e o depois com uma dinâmica cronometrada de busca:
+
+| | Antes | Depois |
+|---|---|---|
+| Tempo para localizar uma ferramenta | 3min19s | 30s |
+
+**Redução de 85%.** E a reposição deixou de depender de alguém notar que o item
+tinha acabado.
+
+## Como funciona
+
+1. **Login** com as credenciais corporativas do usuário, autenticando no
+   SharePoint via API do Office 365
+2. **Escolha do inventário** — ferramentas ou consumíveis
+3. **Visualização** da planilha correspondente em tabela, com busca por nome ou PN
+4. **Entrada e saída** de itens, com validação (não é possível retirar mais do
+   que há em estoque, nem movimentar um PN inexistente)
+5. **Registro automático** de toda operação numa aba de log, com quem movimentou,
+   o quê, quanto e quando
+6. **Solicitação de compra** — ao cruzar o estoque mínimo, o sistema monta e
+   envia um e-mail aos responsáveis com o item, a quantidade atual e a
+   quantidade sugerida para repor, e marca o item como "Enviado para compras"
+   para não duplicar o pedido
+
+O fluxograma completo está em [`fluxograma.pdf`](link).
+
+## Stack
+
+`Python` · `pandas` · `openpyxl` · `tkinter` · `Office365-REST-Python-Client` ·
+`pywin32` (Outlook)
+
+## Decisões de projeto
+
+**Por que Excel no SharePoint e não um banco de dados.** A equipe já trabalhava
+em planilhas no SharePoint e tinha os acessos configurados. Usar o que já
+existia significou zero infraestrutura nova, zero aprovação de TI, e nenhuma
+mudança de hábito para quem ia usar. Num projeto de quatro meses com usuário
+não-técnico, isso valeu mais do que a modelagem ideal.
+
+**Controle de acesso delegado ao SharePoint.** O sistema não armazena
+credenciais nem mantém usuários próprios — quem pode ver e editar cada
+inventário é definido nas permissões do próprio SharePoint. Isso tirou toda a
+superfície de gestão de identidade da aplicação.
+
+**Preservação de formatação na escrita.** As planilhas eram usadas
+manualmente também, então a gravação reaplica fontes, bordas, alinhamento e
+larguras de coluna originais em vez de sobrescrever o arquivo.
+
+**Construção apoiada em IA.** Era o maior projeto em Python que eu já tinha
+feito e o prazo era de quatro meses. Usar IA em todo o desenvolvimento foi o
+que tornou o escopo viável.
+
+## O que eu faria diferente hoje
+
+- Trocar a camada de persistência por um banco, mantendo a planilha apenas
+  como exportação
+- Extrair a lógica de negócio da camada de interface — hoje elas estão
+  acopladas no mesmo módulo
+- Substituir a automação do Outlook via COM por envio server-side, para o
+  sistema não depender de uma máquina Windows com Outlook aberto
+- Adicionar testes para as regras de estoque mínimo e ponto de reposição
